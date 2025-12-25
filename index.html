@@ -3,7 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <!-- === 分享資訊設定區 (修改這裡即可改分享文字) === -->
     <title>比比の待產包</title>
+    <meta name="description" content="專為媽咪設計的待產包清單，支援單機儲存與 Excel 匯出，讓準備過程更輕鬆、更有條理。">
+
+    <!-- Open Graph (用於 LINE/FB 分享) -->
+    <meta property="og:title" content="比比の待產包">
+    <meta property="og:description" content="最溫馨的待產準備 App，清單、備註、數量一目了然！">
+    <meta property="og:type" content="website">
+    <!-- === 分享資訊設定區結束 === -->
+
     <!-- 核心套件 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -17,6 +27,7 @@
             font-family: 'Noto Sans TC', sans-serif;
             -webkit-tap-highlight-color: transparent;
             overscroll-behavior-y: contain;
+            background-color: #FFFDF5;
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -37,12 +48,21 @@
             border-color: #dc2626;
         }
 
-        /* 底部安全距離補償 */
         .pb-safe {
             padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
         }
 
-        /* 動畫效果 */
+        @keyframes shake {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(0.5deg); }
+            50% { transform: rotate(0deg); }
+            75% { transform: rotate(-0.5deg); }
+            100% { transform: rotate(0deg); }
+        }
+        .editing-shake {
+            animation: shake 0.3s infinite;
+        }
+
         .item-enter { animation: slideIn 0.3s ease-out; }
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -74,7 +94,7 @@
 
         const App = () => {
             const [categories, setCategories] = useState(() => {
-                const saved = localStorage.getItem('maternity_categories_v5');
+                const saved = localStorage.getItem('maternity_categories_v7');
                 return saved ? JSON.parse(saved) : ['醫院包', '汭恩待產包', '月中行李'];
             });
 
@@ -85,11 +105,10 @@
             const [expandedItems, setExpandedItems] = useState(new Set());
 
             const [items, setItems] = useState(() => {
-                const saved = localStorage.getItem('maternity_bag_data_v5');
+                const saved = localStorage.getItem('maternity_bag_data_v7');
                 if (saved) return JSON.parse(saved);
 
                 const defaultItems = [
-                    // 醫院包
                     { category: '醫院包', name: '益生菌', checked: true, remark: '' },
                     { category: '醫院包', name: '軟便劑', checked: true, remark: '' },
                     { category: '醫院包', name: '棉花棒', checked: true, remark: '' },
@@ -111,8 +130,6 @@
                     { category: '醫院包', name: '綜合維他命', checked: true, remark: '' },
                     { category: '醫院包', name: '拖鞋', checked: true, remark: '' },
                     { category: '醫院包', name: '中和帶「睡衣、除毛刀」', checked: true, remark: '' },
-
-                    // 汭恩待產包
                     { category: '汭恩待產包', name: '衛生紙', checked: true, remark: '' },
                     { category: '汭恩待產包', name: '包巾', checked: true, remark: '' },
                     { category: '汭恩待產包', name: '棉衣（寶寶出院服）', checked: true, remark: '' },
@@ -124,8 +141,6 @@
                     { category: '汭恩待產包', name: '牙刷牙膏', checked: true, remark: '' },
                     { category: '汭恩待產包', name: '熱敷袋', checked: true, remark: '' },
                     { category: '汭恩待產包', name: '旅行沐浴', checked: true, remark: '' },
-
-                    // 月中行李
                     { category: '月中行李', name: '爸爸媽媽雙證件（身分證健保卡）', checked: true, remark: '' },
                     { category: '月中行李', name: '爸爸媽媽印章', checked: true, remark: '' },
                     { category: '月中行李', name: '戶口名簿', checked: true, remark: '' },
@@ -166,19 +181,40 @@
             });
 
             useEffect(() => {
-                localStorage.setItem('maternity_bag_data_v5', JSON.stringify(items));
+                localStorage.setItem('maternity_bag_data_v7', JSON.stringify(items));
             }, [items]);
 
             useEffect(() => {
-                localStorage.setItem('maternity_categories_v5', JSON.stringify(categories));
+                localStorage.setItem('maternity_categories_v7', JSON.stringify(categories));
             }, [categories]);
 
-            // 分類與項目功能
             const addCategory = () => {
                 const name = prompt('請輸入新分類名稱：');
                 if (name && !categories.includes(name)) {
                     setCategories([...categories, name]);
                     setActiveCategory(name);
+                }
+            };
+
+            const renameCategory = (oldName) => {
+                const newName = prompt('修改分類名稱：', oldName);
+                if (newName && newName !== oldName) {
+                    setCategories(prev => prev.map(c => c === oldName ? newName : c));
+                    setItems(prev => prev.map(item => item.category === oldName ? { ...item, category: newName } : item));
+                    if (activeCategory === oldName) setActiveCategory(newName);
+                }
+            };
+
+            const deleteCategory = (name) => {
+                if (categories.length <= 1) {
+                    alert('至少需保留一個分類');
+                    return;
+                }
+                if (confirm(`確定要刪除「${name}」分類及其所有項目嗎？`)) {
+                    const newCats = categories.filter(c => c !== name);
+                    setCategories(newCats);
+                    setItems(prev => prev.filter(item => item.category !== name));
+                    if (activeCategory === name) setActiveCategory(newCats[0]);
                 }
             };
 
@@ -220,7 +256,7 @@
                 const ws = XLSX.utils.json_to_sheet(data);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "清單");
-                XLSX.writeFile(wb, `比比の待產包_V5_${new Date().toLocaleDateString()}.xlsx`);
+                XLSX.writeFile(wb, `比比の待產包_V7_${new Date().toLocaleDateString()}.xlsx`);
             };
 
             const filteredItems = items.filter(i => i.category === activeCategory);
@@ -228,7 +264,6 @@
 
             return (
                 <div className="min-h-screen bg-[#FFFDF5] text-[#5D4037] pb-48">
-                    {/* Header */}
                     <header className="bg-white/95 backdrop-blur-md sticky top-0 z-50 p-4 shadow-sm border-b border-[#F5E6D3] flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <div className="bg-[#FFEDD5] p-2 rounded-full">
@@ -240,15 +275,13 @@
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            {/* 標籤編輯按鈕 */}
                             <button
                                 onClick={() => setIsEditingCategory(!isEditingCategory)}
-                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#F5E6D3] active:scale-95 transition-all shadow-sm ${isEditingCategory ? 'bg-[#E67E22] text-white' : 'bg-[#FFF2E6] text-[#E67E22]'}`}
+                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#F5E6D3] active:scale-95 transition-all shadow-sm ${isEditingCategory ? 'bg-[#E67E22] text-white shadow-inner scale-105' : 'bg-[#FFF2E6] text-[#E67E22]'}`}
                             >
                                 <Icon name="tag" size={16} />
-                                <span className="text-xs font-bold">標籤編輯</span>
+                                <span className="text-xs font-bold">{isEditingCategory ? '完成編輯' : '標籤編輯'}</span>
                             </button>
-                            {/* 匯出按鈕 */}
                             <button
                                 onClick={exportExcel}
                                 className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-xl active:scale-95 shadow-sm border border-emerald-700"
@@ -259,27 +292,33 @@
                         </div>
                     </header>
 
-                    {/* Nav */}
                     <nav className="sticky top-[68px] bg-[#FFFDF5]/90 backdrop-blur-md z-40 flex px-4 py-4 gap-2 overflow-x-auto no-scrollbar items-center border-b border-[#F5E6D3]/30">
                         {categories.map(cat => (
-                            <button
-                                key={cat}
-                                onClick={() => !isEditingCategory && setActiveCategory(cat)}
-                                className={`whitespace-nowrap px-6 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${activeCategory === cat && !isEditingCategory ? 'bg-[#E67E22] text-white shadow-md' : 'bg-white border border-[#F5E6D3] text-[#A0816C]'}`}
-                            >
-                                {cat}
-                                {isEditingCategory && (
-                                    <span onClick={(e) => { e.stopPropagation(); if(confirm(`刪除「${cat}」？`)) { setCategories(categories.filter(c => c !== cat)); if(activeCategory === cat) setActiveCategory(categories[0]); } }} className="ml-1 text-white/70 hover:text-white"><Icon name="trash-2" size={14}/></span>
-                                )}
-                            </button>
+                            <div key={cat} className="flex-shrink-0 flex items-center gap-1">
+                                <button
+                                    onClick={() => !isEditingCategory && setActiveCategory(cat)}
+                                    className={`whitespace-nowrap px-6 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${
+                                        activeCategory === cat && !isEditingCategory ? 'bg-[#E67E22] text-white shadow-md' : 'bg-white border border-[#F5E6D3] text-[#A0816C]'
+                                    } ${isEditingCategory ? 'border-dashed border-2 border-orange-300 editing-shake bg-orange-50' : ''}`}
+                                >
+                                    {cat}
+                                    {isEditingCategory && (
+                                        <div className="flex items-center gap-2 ml-2 border-l border-orange-200 pl-2">
+                                            <span onClick={(e) => { e.stopPropagation(); renameCategory(cat); }} className="text-orange-600 active:text-orange-800 p-1"><Icon name="pencil" size={14}/></span>
+                                            <span onClick={(e) => { e.stopPropagation(); deleteCategory(cat); }} className="text-red-500 active:text-red-800 p-1"><Icon name="trash-2" size={14}/></span>
+                                        </div>
+                                    )}
+                                </button>
+                            </div>
                         ))}
-                        <button onClick={addCategory} className="flex-shrink-0 p-2 bg-white border-2 border-dashed border-[#F5E6D3] text-[#D3BFA9] rounded-full">
-                            <Icon name="plus" size={16} />
-                        </button>
+                        {!isEditingCategory && (
+                            <button onClick={addCategory} className="flex-shrink-0 p-2 bg-white border-2 border-dashed border-[#F5E6D3] text-[#D3BFA9] rounded-full active:border-[#E67E22] active:text-[#E67E22]">
+                                <Icon name="plus" size={16} />
+                            </button>
+                        )}
                     </nav>
 
                     <main className="px-4 max-w-md mx-auto pt-4">
-                        {/* Progress */}
                         <div className="bg-white rounded-3xl p-5 mb-6 border border-[#F5E6D3] shadow-sm">
                             <div className="flex justify-between items-end mb-3">
                                 <span className="text-[11px] font-bold text-[#A0816C] uppercase tracking-widest">{activeCategory}</span>
@@ -291,48 +330,27 @@
                                 </div>
                             </div>
                             <div className="w-full bg-[#F5E6D3]/50 h-3 rounded-full overflow-hidden">
-                                <div
-                                    className="bg-gradient-to-r from-[#FFB347] to-[#E67E22] h-full transition-all duration-700 rounded-full"
-                                    style={{ width: `${(doneCount / Math.max(1, filteredItems.length)) * 100}%` }}
-                                />
+                                <div className="bg-gradient-to-r from-[#FFB347] to-[#E67E22] h-full transition-all duration-700 rounded-full" style={{ width: `${(doneCount / Math.max(1, filteredItems.length)) * 100}%` }} />
                             </div>
                         </div>
 
-                        {/* List */}
                         <div className="space-y-2.5">
                             {filteredItems.map(item => {
                                 const isExpanded = expandedItems.has(item.id);
                                 return (
                                     <div key={item.id} className="item-enter bg-white rounded-2xl border border-[#F5E6D3] shadow-sm overflow-hidden transition-all">
                                         <div className="flex items-start gap-3 p-3.5">
-                                            {/* 方框勾選區 */}
-                                            <div
-                                                className={`check-box mt-0.5 ${item.checked ? 'checked' : ''}`}
-                                                onClick={() => toggleCheck(item.id)}
-                                            >
-                                                {item.checked && <RedCheckIcon />}
-                                            </div>
-
-                                            {/* 文字點擊區 */}
+                                            <div className={`check-box mt-0.5 ${item.checked ? 'checked' : ''}`} onClick={() => toggleCheck(item.id)}>{item.checked && <RedCheckIcon />}</div>
                                             <div className="flex-grow min-w-0 py-0.5" onClick={() => toggleExpand(item.id)}>
-                                                <span className={`text-[15px] font-bold block leading-snug transition-all ${item.checked ? 'text-[#A0816C]' : 'text-[#5D4037]'} ${!isExpanded ? 'truncate' : 'whitespace-normal'}`}>
-                                                    {item.name}
-                                                </span>
-                                                {item.remark && (
-                                                    <p className="text-[11px] text-[#A0816C] mt-1 font-medium bg-[#F9F5F0] inline-block px-1.5 py-0.5 rounded leading-tight">
-                                                        {item.remark}
-                                                    </p>
-                                                )}
+                                                <span className={`text-[15px] font-bold block leading-snug transition-all ${item.checked ? 'text-[#A0816C]' : 'text-[#5D4037]'} ${!isExpanded ? 'truncate' : 'whitespace-normal'}`}>{item.name}</span>
+                                                {item.remark && <p className="text-[11px] text-[#A0816C] mt-1 font-medium bg-[#F9F5F0] inline-block px-1.5 py-0.5 rounded leading-tight">{item.remark}</p>}
                                             </div>
-
-                                            {/* 數量控制 */}
                                             <div className="flex items-center gap-1 bg-[#F9F5F0] rounded-lg px-2 py-1.5 border border-[#F5E6D3]/50 flex-shrink-0">
                                                 <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? {...i, count: Math.max(1, i.count-1)} : i))} className="p-1"><Icon name="minus" size={14} /></button>
                                                 <span className="text-sm font-black w-5 text-center">{item.count}</span>
                                                 <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? {...i, count: i.count+1} : i))} className="p-1 text-[#E67E22]"><Icon name="plus" size={14} /></button>
                                             </div>
-
-                                            <button onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))} className="text-[#D3BFA9] p-1 mt-0.5"><Icon name="trash-2" size={16} /></button>
+                                            <button onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))} className="text-[#D3BFA9] p-1 mt-0.5 active:text-red-500"><Icon name="trash-2" size={16} /></button>
                                         </div>
                                     </div>
                                 );
@@ -340,33 +358,15 @@
                         </div>
                     </main>
 
-                    {/* Footer Input - 整合一體化設計 */}
                     <div className="fixed bottom-0 left-0 right-0 p-4 pb-safe bg-gradient-to-t from-[#FFFDF5] via-[#FFFDF5] to-transparent z-50">
                         <div className="max-w-md mx-auto bg-white p-3 rounded-3xl shadow-[0_-10px_40px_rgba(93,64,55,0.1)] border border-[#F5E6D3]">
                             <form onSubmit={handleAddItem} className="flex items-center gap-3">
                                 <div className="flex-grow flex flex-col gap-1.5">
-                                    <input
-                                        type="text"
-                                        value={newItemName}
-                                        onChange={(e) => setNewItemName(e.target.value)}
-                                        placeholder={`新增項目名稱...`}
-                                        className="w-full bg-[#F9F5F0] px-4 py-2.5 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E67E22]/20 transition-all font-bold placeholder:font-normal"
-                                    />
-                                    <input
-                                        type="text"
-                                        value={newItemRemark}
-                                        onChange={(e) => setNewItemRemark(e.target.value)}
-                                        placeholder="點此輸入備註 (選填)..."
-                                        className="w-full bg-[#F9F5F0]/50 px-4 py-1.5 text-[11px] rounded-lg focus:outline-none transition-all italic placeholder:not-italic"
-                                    />
+                                    <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder={`新增項目名稱...`} className="w-full bg-[#F9F5F0] px-4 py-2.5 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E67E22]/20 transition-all font-bold placeholder:font-normal" />
+                                    <input type="text" value={newItemRemark} onChange={(e) => setNewItemRemark(e.target.value)} placeholder="點此輸入備註 (選填)..." className="w-full bg-[#F9F5F0]/50 px-4 py-1.5 text-[11px] rounded-lg focus:outline-none transition-all italic placeholder:not-italic" />
                                 </div>
-                                <button
-                                    type="submit"
-                                    className="bg-[#E67E22] text-white w-14 h-14 rounded-2xl flex flex-col items-center justify-center shadow-lg shadow-[#E67E22]/30 active:scale-90 disabled:opacity-30 transition-all flex-shrink-0 border-b-4 border-[#C86610]"
-                                    disabled={!newItemName.trim()}
-                                >
-                                    <Icon name="plus" size={24} />
-                                    <span className="text-[10px] font-bold mt-[-2px]">新增</span>
+                                <button type="submit" className="bg-[#E67E22] text-white w-14 h-14 rounded-2xl flex flex-col items-center justify-center shadow-lg shadow-[#E67E22]/30 active:scale-90 disabled:opacity-30 transition-all flex-shrink-0 border-b-4 border-[#C86610]" disabled={!newItemName.trim()}>
+                                    <Icon name="plus" size={24} /><span className="text-[10px] font-bold mt-[-2px]">新增</span>
                                 </button>
                             </form>
                         </div>
