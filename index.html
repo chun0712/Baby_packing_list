@@ -2,8 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>暖心待產包 - 專業管理版 V2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>比比の待產包 - V4</title>
     <!-- 核心套件 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -13,26 +13,40 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* 自定義勾選框樣式 - 提高穩定性，內部打勾不使用外部圖示庫 */
         .check-box {
             border: 2.5px solid #D3BFA9;
-            width: 26px;
-            height: 26px;
-            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             flex-shrink: 0;
-            cursor: pointer;
             background: white;
         }
         .check-box.checked {
-            border-color: #E67E22;
+            border-color: #dc2626;
+        }
+
+        /* 底部安全距離補償 */
+        .pb-safe {
+            padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+        }
+
+        /* 動畫效果 */
+        .item-enter { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
@@ -42,7 +56,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // 靜態圖示組件 (用於導航與功能按鈕)
         const Icon = ({ name, size = 24, className = "" }) => {
             const iconRef = useRef(null);
             useEffect(() => {
@@ -50,108 +63,98 @@
                     window.lucide.createIcons();
                 }
             }, [name]);
-
-            return (
-                <i
-                    ref={iconRef}
-                    data-lucide={name}
-                    style={{ width: size, height: size, display: 'inline-block' }}
-                    className={className}
-                ></i>
-            );
+            return <i ref={iconRef} data-lucide={name} style={{ width: size, height: size, display: 'inline-block' }} className={className}></i>;
         };
 
-        // 穩定版紅勾 SVG (不依賴 Lucide 處理列表內狀態切換)
         const RedCheckIcon = () => (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
         );
 
         const App = () => {
-            // 分類管理狀態
             const [categories, setCategories] = useState(() => {
-                const saved = localStorage.getItem('maternity_categories_v2');
+                const saved = localStorage.getItem('maternity_categories_v4');
                 return saved ? JSON.parse(saved) : ['醫院包', '汭恩待產包', '月中行李'];
             });
 
             const [activeCategory, setActiveCategory] = useState('醫院包');
             const [isEditingCategory, setIsEditingCategory] = useState(false);
             const [newItemName, setNewItemName] = useState('');
+            const [newItemRemark, setNewItemRemark] = useState('');
+            const [expandedItems, setExpandedItems] = useState(new Set());
 
-            // 資料持久化
             const [items, setItems] = useState(() => {
-                const saved = localStorage.getItem('maternity_bag_data_v2');
+                const saved = localStorage.getItem('maternity_bag_data_v4');
                 if (saved) return JSON.parse(saved);
 
-                // 依照要求預填資料
                 const defaultItems = [
                     // 醫院包
-                    { category: '醫院包', name: '益生菌', checked: true },
-                    { category: '醫院包', name: '軟便劑', checked: true },
-                    { category: '醫院包', name: '棉花棒', checked: true },
-                    { category: '醫院包', name: '吸管杯', checked: true },
-                    { category: '醫院包', name: '讀卡機', checked: true },
-                    { category: '醫院包', name: '洗面乳（中和）、卸妝巾', checked: false },
-                    { category: '醫院包', name: '化妝水（中和）', checked: true },
-                    { category: '醫院包', name: '束腹帶（中和）', checked: true },
-                    { category: '醫院包', name: '鯊魚夾、梳子、綁頭髮（中和）', checked: false },
-                    { category: '醫院包', name: '牙線棒', checked: true },
-                    { category: '醫院包', name: '一套出院服（媽媽）', checked: true },
-                    { category: '醫院包', name: '彎曲吸管（放醫院包）', checked: true },
-                    { category: '醫院包', name: '口罩', checked: true },
-                    { category: '醫院包', name: '防溢乳墊', checked: true },
-                    { category: '醫院包', name: '安睡褲（穿著去醫院）', checked: true },
-                    { category: '醫院包', name: '香草奶嘴、微笑奶嘴', checked: true },
-                    { category: '醫院包', name: '屁屁噴', checked: true },
-                    { category: '醫院包', name: '卵磷脂、回汝茶', checked: true },
-                    { category: '醫院包', name: '綜合維他命', checked: true },
-                    { category: '醫院包', name: '拖鞋', checked: true },
-                    { category: '醫院包', name: '中和帶「睡衣、除毛刀」', checked: true },
+                    { category: '醫院包', name: '益生菌', checked: true, remark: '' },
+                    { category: '醫院包', name: '軟便劑', checked: true, remark: '' },
+                    { category: '醫院包', name: '棉花棒', checked: true, remark: '' },
+                    { category: '醫院包', name: '吸管杯', checked: true, remark: '' },
+                    { category: '醫院包', name: '讀卡機', checked: true, remark: '' },
+                    { category: '醫院包', name: '洗面乳（中和）、卸妝巾', checked: false, remark: '' },
+                    { category: '醫院包', name: '化妝水（中和）', checked: true, remark: '' },
+                    { category: '醫院包', name: '束腹帶（中和）', checked: true, remark: '' },
+                    { category: '醫院包', name: '鯊魚夾、梳子、綁頭髮（中和）', checked: false, remark: '' },
+                    { category: '醫院包', name: '牙線棒', checked: true, remark: '' },
+                    { category: '醫院包', name: '一套出院服（媽媽）', checked: true, remark: '' },
+                    { category: '醫院包', name: '彎曲吸管（放醫院包）', checked: true, remark: '' },
+                    { category: '醫院包', name: '口罩', checked: true, remark: '' },
+                    { category: '醫院包', name: '防溢乳墊', checked: true, remark: '' },
+                    { category: '醫院包', name: '安睡褲（穿著去醫院）', checked: true, remark: '' },
+                    { category: '醫院包', name: '香草奶嘴、微笑奶嘴', checked: true, remark: '' },
+                    { category: '醫院包', name: '屁屁噴', checked: true, remark: '' },
+                    { category: '醫院包', name: '卵磷脂、回汝茶', checked: true, remark: '' },
+                    { category: '醫院包', name: '綜合維他命', checked: true, remark: '' },
+                    { category: '醫院包', name: '拖鞋', checked: true, remark: '' },
+                    { category: '醫院包', name: '中和帶「睡衣、除毛刀」', checked: true, remark: '' },
 
                     // 汭恩待產包
-                    { category: '汭恩待產包', name: '衛生紙', checked: true },
-                    { category: '汭恩待產包', name: '包巾', checked: true },
-                    { category: '汭恩待產包', name: '棉衣（寶寶出院服）', checked: true },
-                    { category: '汭恩待產包', name: '環保餐具', checked: true },
-                    { category: '汭恩待產包', name: '看護墊', checked: true },
-                    { category: '汭恩待產包', name: '免洗內褲', checked: true },
-                    { category: '汭恩待產包', name: '沖洗器', checked: true },
-                    { category: '汭恩待產包', name: '濕紙巾', checked: true },
-                    { category: '汭恩待產包', name: '牙刷牙膏', checked: true },
-                    { category: '汭恩待產包', name: '熱敷袋', checked: true },
-                    { category: '汭恩待產包', name: '旅行沐浴', checked: true },
+                    { category: '汭恩待產包', name: '衛生紙', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '包巾', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '棉衣（寶寶出院服）', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '環保餐具', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '看護墊', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '免洗內褲', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '沖洗器', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '濕紙巾', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '牙刷牙膏', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '熱敷袋', checked: true, remark: '' },
+                    { category: '汭恩待產包', name: '旅行沐浴', checked: true, remark: '' },
 
                     // 月中行李
-                    { category: '月中行李', name: '爸爸媽媽雙證件（身分證健保卡）', checked: true },
-                    { category: '月中行李', name: '爸爸媽媽印章', checked: true },
-                    { category: '月中行李', name: '戶口名簿', checked: true },
-                    { category: '月中行李', name: '出生證明（醫院）', checked: false },
-                    { category: '月中行李', name: '媽媽手冊', checked: true },
-                    { category: '月中行李', name: '月中契約', checked: true },
-                    { category: '月中行李', name: 'L夾', checked: true },
-                    { category: '月中行李', name: '化妝品‼️', checked: true },
-                    { category: '月中行李', name: '外套一件‼️', checked: true },
-                    { category: '月中行李', name: '平板‼️', checked: true },
-                    { category: '月中行李', name: '充電器‼️', checked: true },
-                    { category: '月中行李', name: '彈性襪', checked: true },
-                    { category: '月中行李', name: '刮鬍刀', checked: false },
-                    { category: '月中行李', name: '口罩', checked: false },
-                    { category: '月中行李', name: '相機', checked: true },
-                    { category: '月中行李', name: '行動電源', checked: true },
-                    { category: '月中行李', name: '耳機', checked: true },
-                    { category: '月中行李', name: '衣架', checked: true },
-                    { category: '月中行李', name: '保養品', checked: true },
-                    { category: '月中行李', name: '指甲剪', checked: true },
-                    { category: '月中行李', name: '剪刀/美工刀', checked: true },
-                    { category: '月中行李', name: '妊娠油/妊娠霜', checked: true },
-                    { category: '月中行李', name: '安睡褲', checked: true },
-                    { category: '月中行李', name: '免洗內褲XL（高腰）', checked: true },
-                    { category: '月中行李', name: '看護墊', checked: true },
-                    { category: '月中行李', name: '衛生棉（夜用）、日用', checked: true },
-                    { category: '月中行李', name: '外出服或出院穿（媽媽&小孩*2套 +包巾）', checked: true },
-                    { category: '月中行李', name: '保健食品（綜合維他命、卵磷脂、回汝茶）', checked: true },
-                    { category: '月中行李', name: '奶粉（試用罐）', checked: true }
+                    { category: '月中行李', name: '爸爸媽媽雙證件（身分證健保卡）', checked: true, remark: '' },
+                    { category: '月中行李', name: '爸爸媽媽印章', checked: true, remark: '' },
+                    { category: '月中行李', name: '戶口名簿', checked: true, remark: '' },
+                    { category: '月中行李', name: '出生證明（醫院）', checked: false, remark: '' },
+                    { category: '月中行李', name: '媽媽手冊', checked: true, remark: '' },
+                    { category: '月中行李', name: '月中契約', checked: true, remark: '' },
+                    { category: '月中行李', name: 'L夾', checked: true, remark: '' },
+                    { category: '月中行李', name: '化妝品‼️', checked: true, remark: '' },
+                    { category: '月中行李', name: '外套一件‼️', checked: true, remark: '' },
+                    { category: '月中行李', name: '平板‼️', checked: true, remark: '' },
+                    { category: '月中行李', name: '充電器‼️', checked: true, remark: '' },
+                    { category: '月中行李', name: '彈性襪', checked: true, remark: '' },
+                    { category: '月中行李', name: '刮鬍刀', checked: false, remark: '' },
+                    { category: '月中行李', name: '口罩', checked: false, remark: '' },
+                    { category: '月中行李', name: '相機', checked: true, remark: '' },
+                    { category: '月中行李', name: '行動電源', checked: true, remark: '' },
+                    { category: '月中行李', name: '耳機', checked: true, remark: '' },
+                    { category: '月中行李', name: '衣架', checked: true, remark: '' },
+                    { category: '月中行李', name: '保養品', checked: true, remark: '' },
+                    { category: '月中行李', name: '指甲剪', checked: true, remark: '' },
+                    { category: '月中行李', name: '剪刀/美工刀', checked: true, remark: '' },
+                    { category: '月中行李', name: '妊娠油/妊娠霜', checked: true, remark: '' },
+                    { category: '月中行李', name: '安睡褲', checked: true, remark: '' },
+                    { category: '月中行李', name: '免洗內褲XL（高腰）', checked: true, remark: '' },
+                    { category: '月中行李', name: '看護墊', checked: true, remark: '' },
+                    { category: '月中行李', name: '衛生棉（夜用）、日用', checked: true, remark: '' },
+                    { category: '月中行李', name: '外出服或出院穿（媽媽&小孩*2套 +包巾）', checked: true, remark: '' },
+                    { category: '月中行李', name: '保健食品（綜合維他命、卵磷脂、回汝茶）', checked: true, remark: '' },
+                    { category: '月中行李', name: '奶粉（試用罐）', checked: true, remark: '' }
                 ];
 
                 return defaultItems.map((item, idx) => ({
@@ -162,16 +165,15 @@
                 }));
             });
 
-            // 存儲資料
             useEffect(() => {
-                localStorage.setItem('maternity_bag_data_v2', JSON.stringify(items));
+                localStorage.setItem('maternity_bag_data_v4', JSON.stringify(items));
             }, [items]);
 
             useEffect(() => {
-                localStorage.setItem('maternity_categories_v2', JSON.stringify(categories));
+                localStorage.setItem('maternity_categories_v4', JSON.stringify(categories));
             }, [categories]);
 
-            // 分類功能
+            // 分類與項目功能
             const addCategory = () => {
                 const name = prompt('請輸入新分類名稱：');
                 if (name && !categories.includes(name)) {
@@ -180,186 +182,180 @@
                 }
             };
 
-            const renameCategory = (oldName) => {
-                const newName = prompt('請輸入新的分類名稱：', oldName);
-                if (newName && newName !== oldName) {
-                    setCategories(categories.map(c => c === oldName ? newName : c));
-                    setItems(items.map(item => item.category === oldName ? { ...item, category: newName } : item));
-                    if (activeCategory === oldName) setActiveCategory(newName);
-                }
+            const toggleExpand = (id) => {
+                const next = new Set(expandedItems);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                setExpandedItems(next);
             };
 
-            const deleteCategory = (name) => {
-                if (confirm(`確定要刪除「${name}」分類及其所有項目嗎？`)) {
-                    const newCats = categories.filter(c => c !== name);
-                    setCategories(newCats);
-                    setItems(items.filter(item => item.category !== name));
-                    if (activeCategory === name) setActiveCategory(newCats[0] || '');
-                }
+            const toggleCheck = (id) => {
+                setItems(prev => prev.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
             };
 
-            // 項目功能
             const handleAddItem = (e) => {
                 e.preventDefault();
                 if (!newItemName.trim()) return;
-                const newItem = {
+                setItems(prev => [{
                     id: crypto.randomUUID(),
                     name: newItemName,
+                    remark: newItemRemark.trim(),
                     category: activeCategory,
                     checked: false,
                     count: 1,
                     createdAt: Date.now()
-                };
-                setItems(prev => [...prev, newItem]);
+                }, ...prev]);
                 setNewItemName('');
-            };
-
-            const toggleCheck = (id) => {
-                setItems(prevItems => {
-                    return prevItems.map(item =>
-                        item.id === id ? { ...item, checked: !item.checked } : item
-                    );
-                });
-            };
-
-            const updateCount = (id, delta) => {
-                setItems(prev => prev.map(item => {
-                    if (item.id === id) return { ...item, count: Math.max(1, item.count + delta) };
-                    return item;
-                }));
-            };
-
-            const deleteItem = (id) => {
-                setItems(prev => prev.filter(item => item.id !== id));
+                setNewItemRemark('');
             };
 
             const exportExcel = () => {
-                const data = items.map(i => ({ '分類': i.category, '名稱': i.name, '數量': i.count, '狀態': i.checked ? '已準備' : '待辦' }));
+                const data = items.map(i => ({
+                    '分類': i.category,
+                    '名稱': i.name,
+                    '備註': i.remark || '',
+                    '數量': i.count,
+                    '狀態': i.checked ? '已準備' : '待辦'
+                }));
                 const ws = XLSX.utils.json_to_sheet(data);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "清單");
-                XLSX.writeFile(wb, `待產包_V2_${new Date().toLocaleDateString()}.xlsx`);
+                XLSX.writeFile(wb, `比比の待產包_V4_${new Date().toLocaleDateString()}.xlsx`);
             };
 
             const filteredItems = items.filter(i => i.category === activeCategory);
             const doneCount = filteredItems.filter(i => i.checked).length;
 
             return (
-                <div className="min-h-screen bg-[#FFFDF5] text-[#5D4037] pb-24">
+                <div className="min-h-screen bg-[#FFFDF5] text-[#5D4037] pb-44">
                     {/* Header */}
-                    <header className="bg-white/95 backdrop-blur-md sticky top-0 z-40 p-4 shadow-sm border-b border-[#F5E6D3] flex justify-between items-center">
+                    <header className="bg-white/95 backdrop-blur-md sticky top-0 z-50 p-4 shadow-sm border-b border-[#F5E6D3] flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <div className="bg-[#FFEDD5] p-2 rounded-full">
-                                <Icon name="baby" className="text-[#E67E22]" />
+                                <Icon name="baby" className="text-[#E67E22]" size={20} />
                             </div>
                             <div>
-                                <h1 className="font-bold text-lg leading-tight">暖心待產包 V2</h1>
-                                <p className="text-[10px] text-[#A0816C]">穩定性增強版 · 專業清單</p>
+                                <h1 className="font-bold text-lg leading-tight">比比の待產包</h1>
+                                <p className="text-[10px] text-[#A0816C]"></p>
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            <button
-                                onClick={() => setIsEditingCategory(!isEditingCategory)}
-                                className={`p-2 rounded-xl border border-[#F5E6D3] active:scale-95 transition-all ${isEditingCategory ? 'bg-[#E67E22] text-white shadow-inner' : 'bg-white text-[#A0816C]'}`}
-                            >
-                                <Icon name="settings-2" size={18} />
+                            <button onClick={() => setIsEditingCategory(!isEditingCategory)} className={`p-2 rounded-xl border border-[#F5E6D3] active:scale-95 transition-all ${isEditingCategory ? 'bg-[#E67E22] text-white shadow-inner' : 'bg-white text-[#A0816C]'}`}>
+                                <Icon name="edit" size={18} />
                             </button>
-                            <button
-                                onClick={exportExcel}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 rounded-xl text-emerald-700 font-bold text-xs border border-emerald-100 active:scale-95 transition-all"
-                            >
-                                <Icon name="download" size={16} />
-                                <span>匯出</span>
+                            <button onClick={exportExcel} className="p-2 bg-emerald-50 rounded-xl text-emerald-700 border border-emerald-100 active:scale-95">
+                                <Icon name="download" size={18} />
                             </button>
                         </div>
                     </header>
 
                     {/* Nav */}
-                    <div className="sticky top-[68px] bg-[#FFFDF5]/90 backdrop-blur-md z-30 border-b border-[#F5E6D3]/30">
-                        <nav className="flex px-4 py-4 gap-2 overflow-x-auto no-scrollbar items-center">
-                            {categories.map(cat => (
-                                <div key={cat} className="flex-shrink-0">
-                                    <button
-                                        onClick={() => !isEditingCategory && setActiveCategory(cat)}
-                                        className={`whitespace-nowrap px-6 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${
-                                            activeCategory === cat && !isEditingCategory
-                                            ? 'bg-[#E67E22] text-white shadow-md scale-105'
-                                            : 'bg-white border border-[#F5E6D3] text-[#A0816C]'
-                                        } ${isEditingCategory ? 'border-dashed border-2 border-orange-300' : ''}`}
-                                    >
-                                        {cat}
-                                        {isEditingCategory && (
-                                            <div className="flex gap-1 ml-1 bg-white/20 p-0.5 rounded-md">
-                                                <span onClick={(e) => { e.stopPropagation(); renameCategory(cat); }} className="hover:text-blue-200"><Icon name="edit-3" size={14}/></span>
-                                                <span onClick={(e) => { e.stopPropagation(); deleteCategory(cat); }} className="hover:text-red-200"><Icon name="trash-2" size={14}/></span>
-                                            </div>
-                                        )}
-                                    </button>
-                                </div>
-                            ))}
-                            <button onClick={addCategory} className="flex-shrink-0 p-2 bg-white border-2 border-dashed border-[#F5E6D3] text-[#D3BFA9] rounded-2xl">
-                                <Icon name="plus" size={20} />
+                    <nav className="sticky top-[68px] bg-[#FFFDF5]/90 backdrop-blur-md z-40 flex px-4 py-4 gap-2 overflow-x-auto no-scrollbar items-center border-b border-[#F5E6D3]/30">
+                        {categories.map(cat => (
+                            <button
+                                key={cat}
+                                onClick={() => !isEditingCategory && setActiveCategory(cat)}
+                                className={`whitespace-nowrap px-6 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${activeCategory === cat && !isEditingCategory ? 'bg-[#E67E22] text-white shadow-md' : 'bg-white border border-[#F5E6D3] text-[#A0816C]'}`}
+                            >
+                                {cat}
+                                {isEditingCategory && (
+                                    <span onClick={(e) => { e.stopPropagation(); if(confirm(`刪除「${cat}」？`)) { setCategories(categories.filter(c => c !== cat)); if(activeCategory === cat) setActiveCategory(categories[0]); } }} className="ml-1 text-white/70 hover:text-white"><Icon name="x-circle" size={14}/></span>
+                                )}
                             </button>
-                        </nav>
-                    </div>
+                        ))}
+                        <button onClick={addCategory} className="flex-shrink-0 p-2 bg-white border-2 border-dashed border-[#F5E6D3] text-[#D3BFA9] rounded-full">
+                            <Icon name="plus" size={16} />
+                        </button>
+                    </nav>
 
                     <main className="px-4 max-w-md mx-auto pt-4">
                         {/* Progress */}
                         <div className="bg-white rounded-3xl p-5 mb-6 border border-[#F5E6D3] shadow-sm">
                             <div className="flex justify-between items-end mb-3">
-                                <span className="text-xs font-bold text-[#A0816C] uppercase tracking-widest">{activeCategory}</span>
-                                <span className="text-2xl font-black text-[#E67E22]">
-                                    {doneCount}<span className="text-sm text-[#D3BFA9] mx-1">/</span>{filteredItems.length}
-                                </span>
+                                <span className="text-[11px] font-bold text-[#A0816C] uppercase tracking-widest">{activeCategory}</span>
+                                <div className="text-right">
+                                    <span className="text-[10px] text-[#D3BFA9] block mb-1">完成進度</span>
+                                    <span className="text-2xl font-black text-[#E67E22]">
+                                        {doneCount}<span className="text-sm text-[#D3BFA9] mx-1">/</span>{filteredItems.length}
+                                    </span>
+                                </div>
                             </div>
                             <div className="w-full bg-[#F5E6D3]/50 h-3 rounded-full overflow-hidden">
                                 <div
-                                    className="bg-gradient-to-r from-[#FFB347] to-[#E67E22] h-full transition-all duration-700 rounded-full shadow-[0_0_10px_rgba(230,126,34,0.3)]"
+                                    className="bg-gradient-to-r from-[#FFB347] to-[#E67E22] h-full transition-all duration-700 rounded-full"
                                     style={{ width: `${(doneCount / Math.max(1, filteredItems.length)) * 100}%` }}
                                 />
                             </div>
                         </div>
 
-                        {/* Items */}
-                        <div className="space-y-3">
-                            {filteredItems.map(item => (
-                                <div key={item.id} className="flex items-center gap-3 p-4 rounded-2xl border bg-white border-[#F5E6D3] shadow-sm active:bg-[#F9F5F0] transition-colors">
-                                    <div
-                                        className={`check-box ${item.checked ? 'checked' : ''}`}
-                                        onClick={() => toggleCheck(item.id)}
-                                    >
-                                        {item.checked && <RedCheckIcon />}
+                        {/* List */}
+                        <div className="space-y-2.5">
+                            {filteredItems.map(item => {
+                                const isExpanded = expandedItems.has(item.id);
+                                return (
+                                    <div key={item.id} className="item-enter bg-white rounded-2xl border border-[#F5E6D3] shadow-sm overflow-hidden transition-all">
+                                        <div className="flex items-start gap-3 p-3.5">
+                                            {/* 方框勾選區 (僅點此勾選) */}
+                                            <div
+                                                className={`check-box mt-0.5 ${item.checked ? 'checked' : ''}`}
+                                                onClick={() => toggleCheck(item.id)}
+                                            >
+                                                {item.checked && <RedCheckIcon />}
+                                            </div>
+
+                                            {/* 文字點擊區 */}
+                                            <div className="flex-grow min-w-0 py-0.5" onClick={() => toggleExpand(item.id)}>
+                                                <span className={`text-[15px] font-bold block leading-snug transition-all ${item.checked ? 'text-[#A0816C]' : 'text-[#5D4037]'} ${!isExpanded ? 'truncate' : 'whitespace-normal'}`}>
+                                                    {item.name}
+                                                </span>
+                                                {/* 自動顯示備註 */}
+                                                {item.remark && (
+                                                    <p className="text-[11px] text-[#A0816C] mt-1 font-medium bg-[#F9F5F0] inline-block px-1.5 py-0.5 rounded leading-tight">
+                                                        {item.remark}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* 數量控制 */}
+                                            <div className="flex items-center gap-1 bg-[#F9F5F0] rounded-lg px-2 py-1.5 border border-[#F5E6D3]/50 flex-shrink-0">
+                                                <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? {...i, count: Math.max(1, i.count-1)} : i))} className="p-1"><Icon name="minus" size={14} /></button>
+                                                <span className="text-sm font-black w-5 text-center">{item.count}</span>
+                                                <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? {...i, count: i.count+1} : i))} className="p-1 text-[#E67E22]"><Icon name="plus" size={14} /></button>
+                                            </div>
+
+                                            <button onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))} className="text-[#D3BFA9] p-1 mt-0.5"><Icon name="trash-2" size={16} /></button>
+                                        </div>
                                     </div>
-                                    <div className="flex-grow min-w-0" onClick={() => toggleCheck(item.id)}>
-                                        <span className="text-base font-semibold block truncate text-[#5D4037]">
-                                            {item.name}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-2 bg-[#F9F5F0] rounded-full px-2 py-1 border border-[#F5E6D3]/50">
-                                        <button onClick={(e) => { e.stopPropagation(); updateCount(item.id, -1); }} className="p-1"><Icon name="minus" size={14} /></button>
-                                        <span className="text-xs font-bold w-4 text-center">{item.count}</span>
-                                        <button onClick={(e) => { e.stopPropagation(); updateCount(item.id, 1); }} className="p-1 text-[#E67E22]"><Icon name="plus" size={14} /></button>
-                                    </div>
-                                    <button onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }} className="p-2 text-[#D3BFA9] hover:text-red-500"><Icon name="x" size={18} /></button>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </main>
 
                     {/* Footer Input */}
-                    <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#FFFDF5] to-transparent z-40 pointer-events-none">
-                        <form onSubmit={handleAddItem} className="flex gap-2 max-w-md mx-auto pointer-events-auto">
-                            <input
-                                type="text"
-                                value={newItemName}
-                                onChange={(e) => setNewItemName(e.target.value)}
-                                placeholder={`新增至 ${activeCategory}...`}
-                                className="flex-grow bg-white border-2 border-[#F5E6D3] rounded-2xl px-5 py-4 shadow-xl focus:border-[#E67E22] focus:ring-4 focus:ring-[#E67E22]/10 outline-none transition-all"
-                            />
-                            <button type="submit" className="bg-[#E67E22] text-white p-4 rounded-2xl shadow-xl active:scale-95 disabled:opacity-50" disabled={!newItemName.trim()}>
-                                <Icon name="plus" />
-                            </button>
-                        </form>
+                    <div className="fixed bottom-0 left-0 right-0 p-4 pb-safe bg-gradient-to-t from-[#FFFDF5] via-[#FFFDF5] to-transparent z-50">
+                        <div className="max-w-md mx-auto bg-white p-2 rounded-2xl shadow-2xl border border-[#F5E6D3]">
+                            <form onSubmit={handleAddItem} className="flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={newItemName}
+                                        onChange={(e) => setNewItemName(e.target.value)}
+                                        placeholder={`新增項目...`}
+                                        className="flex-grow bg-[#F9F5F0] px-4 py-3 text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E67E22]/30 transition-all font-bold"
+                                    />
+                                    <button type="submit" className="bg-[#E67E22] text-white w-12 h-12 rounded-xl flex items-center justify-center shadow-lg active:scale-90 disabled:opacity-30 transition-all flex-shrink-0" disabled={!newItemName.trim()}>
+                                        <Icon name="plus" size={24} />
+                                    </button>
+                                </div>
+                                <input
+                                    type="text"
+                                    value={newItemRemark}
+                                    onChange={(e) => setNewItemRemark(e.target.value)}
+                                    placeholder="輸入備註 (選填)..."
+                                    className="bg-[#F9F5F0]/50 px-4 py-2 text-[12px] rounded-lg focus:outline-none transition-all italic"
+                                />
+                            </form>
+                        </div>
                     </div>
                 </div>
             );
