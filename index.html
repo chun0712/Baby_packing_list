@@ -6,12 +6,17 @@
 
     <!-- === 分享資訊設定區 (修改這裡即可改分享文字) === -->
     <title>比比の待產包</title>
-    <meta name="description" content="專為媽咪設計的待產包清單，支援單機儲存與 Excel 匯出，讓準備過程更輕鬆、更有條理。">
+    <meta name="description" content="專為比比媽咪設計的待產包清單，支援單機儲存與 Excel 匯出。">
 
     <!-- Open Graph (用於 LINE/FB 分享) -->
     <meta property="og:title" content="比比の待產包">
-    <meta property="og:description" content="最溫馨的待產準備 App，清單、備註、數量一目了然！">
+    <meta property="og:description" content="最溫馨的待產準備助手，清單、備註、數量一目了然！">
     <meta property="og:type" content="website">
+
+    <!-- 防止快取的 Meta 標籤 -->
+    <meta http-equiv="cache-control" content="no-cache">
+    <meta http-equiv="expires" content="0">
+    <meta http-equiv="pragma" content="no-cache">
     <!-- === 分享資訊設定區結束 === -->
 
     <!-- 核心套件 -->
@@ -94,7 +99,7 @@
 
         const App = () => {
             const [categories, setCategories] = useState(() => {
-                const saved = localStorage.getItem('maternity_categories_v7');
+                const saved = localStorage.getItem('maternity_categories_v9');
                 return saved ? JSON.parse(saved) : ['醫院包', '汭恩待產包', '月中行李'];
             });
 
@@ -105,7 +110,7 @@
             const [expandedItems, setExpandedItems] = useState(new Set());
 
             const [items, setItems] = useState(() => {
-                const saved = localStorage.getItem('maternity_bag_data_v7');
+                const saved = localStorage.getItem('maternity_bag_data_v9');
                 if (saved) return JSON.parse(saved);
 
                 const defaultItems = [
@@ -181,11 +186,11 @@
             });
 
             useEffect(() => {
-                localStorage.setItem('maternity_bag_data_v7', JSON.stringify(items));
+                localStorage.setItem('maternity_bag_data_v9', JSON.stringify(items));
             }, [items]);
 
             useEffect(() => {
-                localStorage.setItem('maternity_categories_v7', JSON.stringify(categories));
+                localStorage.setItem('maternity_categories_v9', JSON.stringify(categories));
             }, [categories]);
 
             const addCategory = () => {
@@ -245,6 +250,7 @@
                 setNewItemRemark('');
             };
 
+            // 手機版相容性匯出功能 (修正 iOS 下載無反應)
             const exportExcel = () => {
                 const data = items.map(i => ({
                     '分類': i.category,
@@ -253,10 +259,35 @@
                     '數量': i.count,
                     '狀態': i.checked ? '已準備' : '待辦'
                 }));
+
                 const ws = XLSX.utils.json_to_sheet(data);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "清單");
-                XLSX.writeFile(wb, `比比の待產包_V7_${new Date().toLocaleDateString()}.xlsx`);
+
+                try {
+                    // 使用 ArrayBuffer 的方式，這在 iOS Safari 上更穩定
+                    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    const url = window.URL.createObjectURL(blob);
+
+                    const a = document.createElement("a");
+                    document.body.appendChild(a);
+                    a.style = "display: none";
+                    a.href = url;
+                    a.download = `比比の待產包_${new Date().toLocaleDateString()}.xlsx`;
+
+                    // 點擊觸發下載
+                    a.click();
+
+                    // 清理
+                    setTimeout(() => {
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                    }, 100);
+                } catch (err) {
+                    console.error("Export Error:", err);
+                    alert("匯出失敗，請檢查瀏覽器設定。");
+                }
             };
 
             const filteredItems = items.filter(i => i.category === activeCategory);
